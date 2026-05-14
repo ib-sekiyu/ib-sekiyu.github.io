@@ -62,19 +62,35 @@
     const GAS_API = 'https://script.google.com/macros/s/AKfycbwT3vmokbvV35CTLH2mZbifKHoJoB5OrKvhn3vs8Ya4G5GwCckgj68D3BOwqxG9YzFdMA/exec';
 
     async function doSearch() {
-      const kw = document.getElementById('q').value.trim();
-      if (!kw) return;
+      // NFKC正規化：全角英数・カナ等を統一してから検索
+      const kw = document.getElementById('q').value.trim().normalize('NFKC');
+      // クエリ長さ制限（100文字超は無効）
+      if (!kw || kw.length > 100) return;
 
+      const btn = document.querySelector('.search-btn');
+      btn.disabled = true;
       document.getElementById('results').innerHTML = '<div class="loading">検索中...</div>';
 
+      // 10秒でタイムアウト
+      const controller = new AbortController();
+      const timer = setTimeout(function() { controller.abort(); }, 10000);
+
       try {
-        const res = await fetch(GAS_API + '?q=' + encodeURIComponent(kw));
+        const res = await fetch(GAS_API + '?q=' + encodeURIComponent(kw), { signal: controller.signal });
+        clearTimeout(timer);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const results = await res.json();
+        // GASがエラーオブジェクトを返した場合も弾く
+        if (!Array.isArray(results)) throw new Error('INVALID_RESPONSE');
         showResults(results);
       } catch (err) {
-        document.getElementById('results').innerHTML =
-          '<div class="empty">エラーが発生しました。しばらく待ってから再試行してください。</div>';
+        clearTimeout(timer);
+        var msg = err.name === 'AbortError'
+          ? '検索がタイムアウトしました。しばらく待ってから再試行してください。'
+          : 'エラーが発生しました。しばらく待ってから再試行してください。';
+        document.getElementById('results').innerHTML = '<div class="empty">' + msg + '</div>';
+      } finally {
+        btn.disabled = false;
       }
     }
 
@@ -89,7 +105,8 @@
         var imageHtml = '';
         var imgUrl = safeUrl(r.imageUrl);
         if (imgUrl) {
-          imageHtml = '<div class="card-image"><img src="' + imgUrl + '" alt="' + esc(r.title) + '" loading="lazy"></div>';
+          // imgUrlもesc()を通してsrc属性の安全を確保
+          imageHtml = '<div class="card-image"><img src="' + esc(imgUrl) + '" alt="' + esc(r.title) + '" loading="lazy"></div>';
         }
 
         var videoHtml = '';
@@ -109,9 +126,22 @@
       }).join('');
     }
 
+    // 信頼ドメインのみ許可（Google Drive / YouTube のみ）
+    var TRUSTED_HOSTS = [
+      'drive.google.com',
+      'lh3.googleusercontent.com',
+      'docs.google.com',
+      'www.youtube.com',
+      'youtu.be',
+      'i.ytimg.com'
+    ];
     function safeUrl(url) {
       var u = String(url || '').trim();
-      return /^https?:\/\//.test(u) ? u : '';
+      if (!/^https:\/\//.test(u)) return '';
+      try {
+        var host = new URL(u).hostname;
+        return TRUSTED_HOSTS.indexOf(host) !== -1 ? u : '';
+      } catch (e) { return ''; }
     }
 
     function esc(str) {
