@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>アイビー石油 オペレーション検索</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif; background: #eef1f5; color: #111; font-weight: 400; -webkit-font-smoothing: antialiased; }
+
+    .header { background: linear-gradient(135deg, #1a4f72, #2e86c1); color: #fff; padding: 18px 16px 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    .header h1 { font-size: 18px; margin: 0; letter-spacing: 0.05em; }
+    .header p { font-size: 12px; margin: 4px 0 0; opacity: 0.8; letter-spacing: 0.1em; }
+
+    .search-box { background: #fff; padding: 14px; border-bottom: 1px solid #d8dde3; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+    .search-row { display: flex; gap: 8px; max-width: 640px; margin: 0 auto; }
+    .search-input { flex: 1; font-size: 16px; padding: 11px 14px; border: 2px solid #c5cdd6; border-radius: 10px; outline: none; background: #f8f9fb; transition: border-color 0.2s; }
+    .search-input:focus { border-color: #2e86c1; background: #fff; }
+    .search-btn { padding: 11px 18px; background: #1a4f72; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: bold; cursor: pointer; letter-spacing: 0.05em; transition: background 0.2s; }
+    .search-btn:active { background: #154060; }
+
+    .results { padding: 14px; max-width: 640px; margin: 0 auto; }
+
+    .card { background: #fff; border-radius: 12px; padding: 16px 18px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); border-left: 5px solid #2e86c1; }
+    .card-title { font-size: 16px; font-weight: bold; color: #1a4f72; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .card-title::before { content: ""; display: inline-block; width: 8px; height: 8px; background: #2e86c1; border-radius: 50%; flex-shrink: 0; }
+    .card-rule { font-size: 15px; line-height: 1.9; white-space: pre-wrap; color: #111; font-weight: 500; background: #f4f7fa; border-radius: 8px; padding: 12px 14px; }
+    .card-note { font-size: 13px; color: #555; font-weight: 500; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e9ee; display: flex; align-items: center; gap: 4px; }
+    .card-note::before { content: "※"; }
+
+    .card-image { margin-top: 12px; }
+    .card-image img { width: 100%; border-radius: 8px; display: block; }
+
+    .card-video { margin-top: 12px; }
+    .video-btn { display: inline-flex; align-items: center; gap: 8px; background: #e8f4fc; color: #1a4f72; font-size: 14px; font-weight: bold; padding: 10px 16px; border-radius: 8px; text-decoration: none; border: 1.5px solid #aad4ef; transition: background 0.2s; }
+    .video-btn:active { background: #d0eaf8; }
+    .video-btn::before { content: "▶"; font-size: 13px; }
+
+    .empty { text-align: center; color: #aaa; padding: 48px 16px; font-size: 14px; }
+    .hint { text-align: center; color: #c0c8d4; padding: 48px 16px; font-size: 13px; line-height: 2; }
+    .hint::before { content: "🔍"; display: block; font-size: 32px; margin-bottom: 12px; }
+    .loading { text-align: center; color: #c0c8d4; padding: 48px 16px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>オペレーション検索</h1>
+    <p>アイビー石油</p>
+  </div>
+  <div class="search-box">
+    <div class="search-row">
+      <input class="search-input" type="search" id="q" placeholder="顧客名・キーワードを入力">
+      <button class="search-btn" onclick="doSearch()">検索</button>
+    </div>
+  </div>
+  <div class="results" id="results">
+    <div class="hint">キーワードを入力して<br>対応ルールを検索できます</div>
+  </div>
+
+  <script>
+    // GASのJSON APIエンドポイント
+    const GAS_API = 'https://script.google.com/macros/s/AKfycbwT3vmokbvV35CTLH2mZbifKHoJoB5OrKvhn3vs8Ya4G5GwCckgj68D3BOwqxG9YzFdMA/exec';
+
+    async function doSearch() {
+      const kw = document.getElementById('q').value.trim();
+      if (!kw) return;
+
+      document.getElementById('results').innerHTML = '<div class="loading">検索中...</div>';
+
+      try {
+        const res = await fetch(GAS_API + '?q=' + encodeURIComponent(kw));
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const results = await res.json();
+        showResults(results);
+      } catch (err) {
+        document.getElementById('results').innerHTML =
+          '<div class="empty">エラーが発生しました。しばらく待ってから再試行してください。</div>';
+      }
+    }
+
+    function showResults(results) {
+      const el = document.getElementById('results');
+      if (!results || results.length === 0) {
+        el.innerHTML = '<div class="empty">一致するルールはありません</div>';
+        return;
+      }
+
+      el.innerHTML = results.map(function(r) {
+        var imageHtml = '';
+        var imgUrl = safeUrl(r.imageUrl);
+        if (imgUrl) {
+          imageHtml = '<div class="card-image"><img src="' + imgUrl + '" alt="' + esc(r.title) + '" loading="lazy"></div>';
+        }
+
+        var videoHtml = '';
+        var vidUrl = safeUrl(r.videoUrl);
+        if (vidUrl) {
+          // GASのiframe外なので <a href target="_blank"> が正常に動作する
+          videoHtml = '<div class="card-video"><a class="video-btn" href="' + esc(vidUrl) + '" target="_blank" rel="noopener noreferrer">動画を確認する</a></div>';
+        }
+
+        return '<div class="card">'
+          + '<div class="card-title">' + esc(r.title) + '</div>'
+          + '<div class="card-rule">' + esc(r.rule) + '</div>'
+          + (r.note ? '<div class="card-note">' + esc(r.note) + '</div>' : '')
+          + imageHtml
+          + videoHtml
+          + '</div>';
+      }).join('');
+    }
+
+    function safeUrl(url) {
+      var u = String(url || '').trim();
+      return /^https?:\/\//.test(u) ? u : '';
+    }
+
+    function esc(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    document.getElementById('q').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') doSearch();
+    });
+  </script>
+</body>
+</html>
