@@ -62,12 +62,15 @@
     const GAS_API = 'https://script.google.com/macros/s/AKfycbwT3vmokbvV35CTLH2mZbifKHoJoB5OrKvhn3vs8Ya4G5GwCckgj68D3BOwqxG9YzFdMA/exec';
 
     async function doSearch() {
+      const btn = document.querySelector('.search-btn');
+      // 検索中の二重実行を防ぐ（ボタン連打・Enter連打対策）
+      if (btn.disabled) return;
+
       // NFKC正規化：全角英数・カナ等を統一してから検索
       const kw = document.getElementById('q').value.trim().normalize('NFKC');
       // クエリ長さ制限（100文字超は無効）
       if (!kw || kw.length > 100) return;
 
-      const btn = document.querySelector('.search-btn');
       btn.disabled = true;
       document.getElementById('results').innerHTML = '<div class="loading">検索中...</div>';
 
@@ -149,7 +152,8 @@
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     document.getElementById('q').addEventListener('keydown', function(e) {
