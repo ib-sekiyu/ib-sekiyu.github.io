@@ -116,7 +116,7 @@
         var vidUrl = safeUrl(r.videoUrl);
         if (vidUrl) {
           // GASのiframe外なので <a href target="_blank"> が正常に動作する
-          videoHtml = '<div class="card-video"><a class="video-btn" href="' + esc(vidUrl) + '" target="_blank" rel="noopener noreferrer">動画を確認する</a></div>';
+          videoHtml = '<div class="card-video"><a class="video-btn" href="' + esc(vidUrl) + '" target="_blank" rel="noopener noreferrer">詳細を確認する</a></div>';
         }
 
         return '<div class="card">'
